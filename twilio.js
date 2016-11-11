@@ -2709,7 +2709,7 @@ PeerConnection.prototype.openHelper = function(next, audioConstraints) {
         } else {
             next({
               error: error,
-              message: "Error occurred while accessing microphone.",
+              message: 'Error occurred while accessing microphone: ' + error.name + ' (' + error.message + ').',
               code: 31201
             });
         }
@@ -3794,12 +3794,12 @@ function getPStreamVersion() {
 
 function getSDKHash() {
   // NOTE(mroberts): Set by `Makefile'.
-  return "a54b4e9";
+  return "f5a2100";
 }
 
 function getReleaseVersion() {
   // NOTE(jvass): Set by `Makefile`.
-  return "1.3.12";
+  return "1.3.13";
 }
 
 function getSoundVersion() {
@@ -8512,7 +8512,7 @@ var grammar = module.exports = {
   a: [
     { //a=rtpmap:110 opus/48000/2
       push: 'rtp',
-      reg: /^rtpmap:(\d*) ([\w\-\.]*)(?:\s*\/(\d*)(?:\s*\/(\S*))?)?/,
+      reg: /^rtpmap:(\d*) ([\w\-]*)(?:\s*\/(\d*)(?:\s*\/(\S*))?)?/,
       names: ['payload', 'codec', 'rate', 'encoding'],
       format: function (o) {
         return (o.encoding) ?
@@ -8808,7 +8808,7 @@ exports.parse = function (sdp) {
 };
 
 var fmtpReducer = function (acc, expr) {
-  var s = expr.split(/=(.+)/, 2);
+  var s = expr.split('=');
   if (s.length === 2) {
     acc[s[0]] = toIntIfInt(s[1]);
   }
