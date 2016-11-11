@@ -363,7 +363,8 @@ function Connection(device, message, options) {
     this._onCancel = function(payload) {
         var callsid = payload.callsid;
         if (self.parameters.CallSid == callsid) {
-            self.ignore();
+            self._status = "closed";
+            self.emit("cancel");
             self.pstream.removeListener("cancel", self._onCancel);
         }
     };
@@ -374,7 +375,7 @@ function Connection(device, message, options) {
 
     this.on('error', function(error) {
         publisher.error('connection', 'error', {
-          data: { code: error.code, message: error.message }
+          code: error.code, message: error.message
         });
 
         if (self.pstream && self.pstream.status === 'disconnected') {
@@ -1613,6 +1614,14 @@ function formatMetric(sample) {
       (Math.round(sample.packetsLostFraction * 100) / 100),
     audio_level_in: sample.audioInputLevel,
     audio_level_out: sample.audioOutputLevel,
+    codec_name: sample.codecName,
+    local_candidate_address: sample.candidatePair.localAddress,
+    local_candidate_id: sample.candidatePair.localCandidateId,
+    local_candidate_type: sample.candidatePair.localCandidateType,
+    remote_candidate_address: sample.candidatePair.remoteAddress,
+    remote_candidate_id: sample.candidatePair.remoteCandidateId,
+    remote_candidate_type: sample.candidatePair.remoteCandidateType,
+    candidate_transport_type: sample.candidatePair.transportType,
     jitter: sample.jitter,
     rtt: sample.rtt,
     mos: sample.mos && (Math.round(sample.mos * 100) / 100)
@@ -2231,12 +2240,22 @@ RTCMonitor.createSample = function createSample(stats, previousSample) {
       bytesReceived: stats.bytesReceived,
       bytesSent: stats.bytesSent
     },
+    candidatePair: {
+      localAddress: stats.localAddress,
+      localCandidateId: stats.localCandidateId,
+      localCandidateType: stats.localCandidateType,
+      remoteAddress: stats.remoteAddress,
+      remoteCandidateId: stats.remoteCandidateId,
+      remoteCandidateType: stats.remoteCandidateType,
+      transportType: stats.transportType
+    },
     packetsSent: currentPacketsSent,
     packetsReceived: currentPacketsReceived,
     packetsLost: currentPacketsLost,
     packetsLostFraction: currentPacketsLostFraction,
     audioInputLevel: stats.audioInputLevel,
     audioOutputLevel: stats.audioOutputLevel,
+    codecName: stats.codecName,
     jitter: stats.jitter,
     rtt: stats.rtt,
     mos: Mos.calculate(stats, previousSample && currentPacketsLostFraction)
@@ -2709,7 +2728,7 @@ PeerConnection.prototype.openHelper = function(next, audioConstraints) {
         } else {
             next({
               error: error,
-              message: 'Error occurred while accessing microphone: ' + error.name + ' (' + error.message + ').',
+              message: 'Error occurred while accessing microphone: ' + error.name + (error.message ? ' (' + error.message + ')' : ''),
               code: 31201
             });
         }
@@ -3244,6 +3263,21 @@ function processCandidatePair(report) {
         break;
       case 'googRemoteAddress':
         knownStats['remoteAddress'] = value;
+        break;
+      case 'googLocalCandidateType':
+        knownStats['localCandidateType'] = value;
+        break;
+      case 'googRemoteCandidateType':
+        knownStats['remoteCandidateType'] = value;
+        break;
+      case 'googTransportType':
+        knownStats['transportType'] = value;
+        break;
+      case 'localCandidateId':
+        knownStats['localCandidateId'] = value;
+        break;
+      case 'remoteCandidateId':
+        knownStats['remoteCandidateId'] = value;
         break;
       case 'googRtt':
         knownStats['rtt'] = Number(value);
@@ -3794,12 +3828,12 @@ function getPStreamVersion() {
 
 function getSDKHash() {
   // NOTE(mroberts): Set by `Makefile'.
-  return "f5a2100";
+  return "46cf2c8";
 }
 
 function getReleaseVersion() {
   // NOTE(jvass): Set by `Makefile`.
-  return "1.3.13";
+  return "1.3.14";
 }
 
 function getSoundVersion() {
@@ -8512,7 +8546,7 @@ var grammar = module.exports = {
   a: [
     { //a=rtpmap:110 opus/48000/2
       push: 'rtp',
-      reg: /^rtpmap:(\d*) ([\w\-]*)(?:\s*\/(\d*)(?:\s*\/(\S*))?)?/,
+      reg: /^rtpmap:(\d*) ([\w\-\.]*)(?:\s*\/(\d*)(?:\s*\/(\S*))?)?/,
       names: ['payload', 'codec', 'rate', 'encoding'],
       format: function (o) {
         return (o.encoding) ?
@@ -8808,7 +8842,7 @@ exports.parse = function (sdp) {
 };
 
 var fmtpReducer = function (acc, expr) {
-  var s = expr.split('=');
+  var s = expr.split(/=(.+)/, 2);
   if (s.length === 2) {
     acc[s[0]] = toIntIfInt(s[1]);
   }
